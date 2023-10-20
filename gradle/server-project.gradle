@@ -1,0 +1,101 @@
+project.ext.projectRun = { JavaExec task, String projectName ->
+    // 각 메인 프로젝트의 디폴트 bootRun 태스크를 변수에 할당하여 쉽게 사용 가능하게 함
+    def bootRun = project.tasks.bootRun as JavaExec
+
+    // JavaExec에 요구되는 프로퍼티 중 bootRun이 가지고 있는 모든 프로퍼티를 이식함
+    // 이로써 BootRun와 동일한 태스크를 수행하는 태스크를 생성 가능
+    task.setGroup "application/${projectName}"
+    task.setAllJvmArgs bootRun.allJvmArgs
+    task.setArgs bootRun.args
+    task.setBootstrapClasspath bootRun.bootstrapClasspath
+    task.setClasspath bootRun.classpath
+    task.setDebug bootRun.debug
+    task.setDefaultCharacterEncoding bootRun.defaultCharacterEncoding
+    task.setEnableAssertions bootRun.enableAssertions
+    task.setEnvironment bootRun.environment
+    task.setJvmArgs bootRun.jvmArgs
+    task.setMaxHeapSize bootRun.maxHeapSize
+    task.setSystemProperties bootRun.systemProperties
+    task.setWorkingDir bootRun.workingDir
+    task.setMain project.ext.mainClassName as String
+}
+
+// 실제 메인프로젝트의 편의성 태스크를 생성함
+// 메인프로젝트가 가지고 있는 profiles 갯수만큼 태스크가 생성됨
+def createProfiledTasks = { String profileName ->
+    // def projectName = project.name.replace('process' as String, '')
+    def projectName = project.name
+
+    project.tasks.register("projectRun-${projectName}-${profileName}", JavaExec) { JavaExec task ->
+        project.ext.doInitialize(profileName)
+        project.ext.projectRun(task, projectName)
+    }
+
+    project.tasks.register("projectJar-${projectName}-${profileName}") { Task task ->
+        project.ext.doInitialize(profileName)
+        project.ext.projectJar(task, projectName, profileName)
+    }
+}
+
+project.ext.projectJar = { Task task, String projectName, String profileName ->
+    ///build 위치에 생성
+    project.setBuildDir(project.rootDir.path + "/build")
+
+    // 각 메인 프로젝트의 디폴트 bootJar 태스크를 변수에 할당하여 쉽게 사용 가능하게 함
+    def jar = project.tasks.bootJar as org.gradle.jvm.tasks.Jar
+
+    // JAR 베이스 이름을 단순하게 지정함
+    jar.setArchiveBaseName projectName
+
+    // 버전이 없을 경우 프로필명만 기입, 있을 경우 프로필명에 버전을 포함해서 기입
+    if (project.version == null || project.version == 'unspecified') {
+        jar.setArchiveVersion profileName
+    } else {
+        jar.setArchiveVersion project.version
+    }
+
+    task.setGroup 'build'
+    task.finalizedBy jar // 태스크 세팅 후 bootJar 실행
+}
+
+//def newProfile = false
+fileTree("${project.projectDir.path}/profile").visit({ FileVisitDetails profileDetails ->
+    if (!profileDetails.directory && profileDetails.file.name.matches(/^.+\.gradle$/)) {
+        //newProfile = true
+        createProfiledTasks(profileDetails.file.name.replace('.gradle', ''))
+    }else{
+        println("fail")
+    }
+} as Action<FileVisitDetails>)
+
+
+
+task resourcesfile {
+    doFirst({
+        def setFileProperty = { String filename, String key, String value ->
+
+            def file = new File("${buildDir}", "resources/main/${filename}")
+            if (!file.exists()) file.createNewFile()
+
+            def customizedFileText = file.getText('UTF-8')
+            customizedFileText = customizedFileText.replaceAll(/\s*${key}.+/, "")
+            customizedFileText += "\n\n${key}=${value}"
+
+            file.setText(customizedFileText, 'UTF-8')
+        }
+
+        if (project.ext.has('profile')) {
+            // 스프링 프로필은 3종류로만 나눔
+            def springProfile = 'develop'
+            if (project.ext.profile.contains('release')) {
+                springProfile = 'release'
+            }else if (project.ext.profile.contains('local')) {
+                springProfile = 'local'
+            }
+
+            setFileProperty('application.properties', 'spring.profiles.active', springProfile)
+        }
+    } as Action<Task>)
+}
+
+project.tasks.processResources.finalizedBy project.tasks.resourcesfile

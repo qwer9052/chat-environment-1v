@@ -1,0 +1,37 @@
+buildscript {
+    repositories.maven { url "https://plugins.gradle.org/m2/" }
+    dependencies.classpath 'org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r'
+}
+
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.Ref
+import org.eclipse.jgit.lib.Repository
+import org.eclipse.jgit.transport.CredentialsProvider
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
+import org.eclipse.jgit.transport.RemoteConfig
+
+project.ext.hasGit = { ->
+    try {
+        return Git.open(project.projectDir) != null
+
+    } catch (Exception ignore) {
+        return false
+    }
+}
+
+project.ext.getGit = { ->
+    return Git.open(project.projectDir)
+}
+
+project.ext.cloneGit = { String uri->
+    try {
+        return Git.cloneRepository()
+                .setURI(uri)
+                .setDirectory(project.projectDir)
+                .setCredentialsProvider(new UsernamePasswordCredentialsProvider(System.getenv("JGIT_USERNAME"), System.getenv("JGIT_SECRET")))
+                .call()
+    } catch (Exception e) {
+        println 'pls check jgit id/pw'
+        throw e
+    }
+}

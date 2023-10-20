@@ -1,0 +1,41 @@
+buildscript {
+    repositories.maven { url "https://plugins.gradle.org/m2/" }
+    dependencies {
+        classpath group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '5.13.0.202109080827-r'
+        classpath group: 'org.springframework.boot', name: 'spring-boot-gradle-plugin', version: property('PROJECT.SPRINGBOOT')
+        classpath group: 'io.spring.gradle', name: 'dependency-management-plugin'
+    }
+}
+
+apply plugin: 'java'
+
+for (Project project : subprojects) {
+    if (project.projectDir.parentFile.name == property('PROJECT.DIR.NAME')) {
+        project.setGroup property('PROJECT.GROUP')
+    } else if (project.projectDir.parentFile.name == property('MODULE.DIR.NAME')) {
+        project.setGroup property('MODULE.GROUP')
+    }
+}
+
+
+subprojects{
+
+    java.sourceCompatibility = JavaVersion.VERSION_17
+    java.targetCompatibility = JavaVersion.VERSION_17
+
+    apply plugin: 'java'
+    apply plugin: 'idea'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
+    apply plugin: 'maven-publish'
+
+    project.apply from: "${rootProject.projectDir.path}/gradle/frameworks.gradle"
+    project.apply from: "${rootProject.projectDir.path}/gradle/methods.gradle"
+
+
+    configurations.all { Configuration configuration ->
+        configuration.resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
+    }
+}
+

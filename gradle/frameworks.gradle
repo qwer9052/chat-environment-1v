@@ -1,0 +1,132 @@
+buildscript {
+    repositories{
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+    repositories.maven { url "https://plugins.gradle.org/m2/" }
+    dependencies.classpath 'org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r'
+}
+
+import org.eclipse.jgit.api.Git
+
+//// 기본적으로 필요한 플러그인 적용
+project.apply plugin: 'java-library'
+project.apply plugin: 'org.springframework.boot'
+project.apply plugin: 'io.spring.dependency-management'
+project.apply plugin: 'java'
+
+repositories{
+    mavenCentral()
+}
+
+dependencies { DependencyHandler dependencies ->
+    // 전체 프로젝트에 대해 컴파일 소스 코드 검사 시 롬복 관련 프로세싱 적용
+    // (롬복으로 자동으로 추가되는 getter/setter 등의 메소드와 프로퍼티를 읽을 수 있게 됨)
+    dependencies.compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.22'
+    dependencies.annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.22'
+    dependencies.implementation group: 'org.modelmapper', name: 'modelmapper', version: '2.3.8'
+//    dependencies.implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    dependencies.implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    dependencies.implementation 'org.springframework.boot:spring-boot-starter-validation'
+    dependencies.implementation 'org.springframework.boot:spring-boot-starter-web'
+
+}
+
+// Source JAR Artifact를 생성해주는 옵션
+// 소스코드에 포함된 주석을 포함한 실제 소스코드를 볼 수 있는 Source JAR 생성
+project.compileJava.options.encoding = 'UTF-8'
+project.compileTestJava.options.encoding = 'UTF-8'
+project.java.withSourcesJar()
+
+
+// JAVA 컴파일 시 별도 프로세스로 실행 (메인 그래들의 부담을 줄여주고, 컴파일러를 재사용함)
+project.tasks.withType(JavaCompile) {
+    options.fork = true
+}
+// JAR로 묶을 때 중복되는 파일이 있을 수 있는데, 이 중복되는 파일에 대한 처리 방식을 지정함
+project.tasks.withType(Copy) { Copy copy ->
+    copy.duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+// 압축을 담당하는 타입 (JAR 등) 에서 중복 파일에 대한 정책을 허용함 (상위 그래들 버전에서의 권장사항)
+project.tasks.withType(Zip) { Zip zip ->
+    zip.duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+def hasGit(project) {
+    def gitDir = new File(project.projectDir, '.git')
+    return gitDir.exists() && gitDir.isDirectory()
+}
+
+// 깃 레포지토리 활성화가 되어야만 세팅할 수 있도록 함
+if (hasGit(project)) {
+
+    // 서브모듈들에만 적용되는 설정
+    if (project.group == property('MODULE.GROUP')) {
+        project.apply from: "${rootProject.projectDir.path}/gradle/framework-module.gradle"
+    }
+
+    // 메인프로젝트에만 적용되는 설정
+    if (project.group == property('PROJECT.GROUP')) {
+        project.apply from: "${rootProject.projectDir.path}/gradle/server-project.gradle"
+    }
+}
+
+
+// 프로젝트들의 일부 디폴트 태스크의 사용을 막음 (실수로라도 실행하는 것을 방지)
+project.tasks.test { setGroup 'unused' }
+project.tasks.bootJarMainClassName { setGroup 'unused'; doFirst { project.ext.checkInitialize('bootJar', 'project-service-xxx:projectJar-xxx') } }
+project.tasks.bootRunMainClassName { setGroup 'unused'; doFirst { project.ext.checkInitialize('bootJar', 'projectRun-xxx') } }
+
+// 내부적으로 위 태스크를 사용하는 녀석들도 unused에 넣어 실수로라도 사용하는 것을 방지
+project.tasks.assemble { setGroup 'unused' }
+project.tasks.build { setGroup 'unused' }
+project.tasks.buildDependents { setGroup 'unused' }
+project.tasks.bootJar { setGroup 'unused' }
+project.tasks.bootRun { setGroup 'unused' }
+project.tasks.bootBuildImage { setGroup 'unused' }
+project.tasks.check { setGroup 'unused' }
+
+// 수정으로 인해 Circular dependency를 가진 태스크를 비활성화하여 실수로라도 사용하는 것을 방지
+project.tasks.buildNeeded { setGroup 'unused' }
+
+project.tasks.register('clone', { Task it ->
+    it.group 'build setup'
+
+    it.doFirst {
+        def repo = projectDir.name
+
+        // 깃 디렉터리임을 인지할 수 없는 상황이나 깃 디렉터리로 인식할 수 없는 상황일 경우 상황에 맞는 예외 처리
+        if (!project.ext.has('hasGit')) throw new UnsupportedOperationException('Can\'t check git, please retry!')
+        if (project.projectDir.exists() && !project.ext.hasGit()) {
+            println "WARNING: Git not exists in project ${project.name}! trying delete project directory..."
+            //project.projectDir.delete()
+        }
+
+        if (!project.projectDir.exists()) {
+            def url = project.property('REPO.GIT.URL')
+            def branch = project.property('REPO.GIT.BRANCH')
+
+            println "git clone --depth 1 ${url}/${repo} ${project.projectDir.absolutePath} && cd ${project.projectDir.absolutePath} && git checkout --depth 1 -b ${branch} origin/${branch}"
+            println "no repository found, cloning from '${url}/${repo}' and checkout from origin/${branch}"
+
+            def git = project.ext.cloneGit("${url}/${repo}") as Git
+            try {
+                git.checkout()
+                        .setStartPoint("origin/${branch}")
+                        .setName("${branch}")
+                        .setCreateBranch(true)
+                        .call()
+            } catch (Exception e) {
+                // 여기로 오는 경우는 처음 레포지토리를 클론한 경우밖에 없으므로, origin/${branch} 가 없는 경우밖에 없음
+                // 해당 메세지를 출력하고, 디폴트 브랜치를 그대로 사용함
+                println "WARNING: Branch '${branch}' not exists in repository '${repo}'! using default branch..."
+            } finally {
+                git.close()
+            }
+        } else if (project.hasProperty('update')) {
+            def git = project.ext.getGit() as Git
+            git.pull().call()
+            git.close()
+        }
+    }
+})
+

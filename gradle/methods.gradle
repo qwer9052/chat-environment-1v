@@ -1,0 +1,34 @@
+// 추가 메서드들에 대한 적용
+project.apply from: "${rootProject.projectDir.path}/gradle/git.gradle"
+
+project.ext.doInitialize = { String profileName ->
+    project.sourceSets.main.resources.srcDirs("src/main/resources", "src/main/profile/${profileName}", "src/main/java")
+    project.sourceSets.main.resources.filter.exclude("*.java", "*.class")
+    project.ext.set('initialized', true)
+    project.ext.set('profile', profileName)
+}
+
+project.ext.checkInitialize = { String executingTask, String recommendedTask ->
+    if (!project.ext.has('initialized'))
+        throw new UnsupportedOperationException("Can't execute ${executingTask} directly, use ${recommendedTask} instead!")
+}
+
+
+// 프레임워크 implementation을 돕는 메서드
+// 버전관련코드가 추가되어야함
+//project.ext.project = { String projectName ->
+//
+//    if (project.projectDir.exists() && !project.ext.hasGit()) {
+//        println "WARNING: Git not exists in project ${project.name}! trying delete project directory..."
+//        //project.projectDir.delete()
+//    }
+//
+//    def childProject = project( ':' + projectName)
+//    if (childProject != null && project.ext.has('hasGit') && project.ext.hasGit()) {
+//        return childProject
+//    }
+//
+//    return dependencies.create(group: property('MODULE.GROUP'), name: projectName, version: '+') { ExternalModuleDependency dependency ->
+//        dependency.setChanging(true)
+//    }
+//}
