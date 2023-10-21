@@ -1,0 +1,13 @@
+rootProject.setName 'chat-environment-1v'
+
+def doInclude(String projectName, String directoryName, String repositoryName) {
+    include projectName
+    project(":${projectName}").setProjectDir file("${rootProject.projectDir.path}/${directoryName}/${repositoryName}")
+}
+def includeModule(String projectName, String repositoryName = projectName) { doInclude(projectName, 'project-framework', repositoryName) }
+def includeProject(String projectName, String repositoryName = projectName) { doInclude(projectName, 'project-server', repositoryName) }
+
+////모듈이 추가될때마다 주석을 포함하여 작성해야함,
+////하단에 모듈이 없을시 배포가 되지않습니다. 삭제 금지
+
+//includeProject('project-service-process-api')

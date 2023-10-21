@@ -73,8 +73,8 @@ if (hasGit(project)) {
 
 // 프로젝트들의 일부 디폴트 태스크의 사용을 막음 (실수로라도 실행하는 것을 방지)
 project.tasks.test { setGroup 'unused' }
-project.tasks.bootJarMainClassName { setGroup 'unused'; doFirst { project.ext.checkInitialize('bootJar', 'project-service-xxx:projectJar-xxx') } }
-project.tasks.bootRunMainClassName { setGroup 'unused'; doFirst { project.ext.checkInitialize('bootJar', 'projectRun-xxx') } }
+//project.tasks.bootJarMainClassName { setGroup 'unused'; doFirst { project.ext.checkInitialize('bootJar', 'project-service-xxx:projectJar-xxx') } }
+//project.tasks.bootRunMainClassName { setGroup 'unused'; doFirst { project.ext.checkInitialize('bootJar', 'projectRun-xxx') } }
 
 // 내부적으로 위 태스크를 사용하는 녀석들도 unused에 넣어 실수로라도 사용하는 것을 방지
 project.tasks.assemble { setGroup 'unused' }
@@ -126,7 +126,11 @@ project.tasks.register('clone', { Task it ->
             def git = project.ext.getGit() as Git
             git.pull().call()
             git.close()
+        }else{
+//            println "WARNING: Branch '${branch}' not exists in repository '${repo}'! using default branch..."
+            println("WARNING: not found project")
         }
+
     }
 })
 

@@ -17,7 +17,6 @@ for (Project project : subprojects) {
     }
 }
 
-
 subprojects{
 
     java.sourceCompatibility = JavaVersion.VERSION_17
@@ -32,7 +31,6 @@ subprojects{
 
     project.apply from: "${rootProject.projectDir.path}/gradle/frameworks.gradle"
     project.apply from: "${rootProject.projectDir.path}/gradle/methods.gradle"
-
 
     configurations.all { Configuration configuration ->
         configuration.resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
